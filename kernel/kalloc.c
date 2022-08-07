@@ -23,6 +23,23 @@ struct {
   struct run *freelist;
 } kmem;
 
+// -- my code for lab2 --
+int free_mem = 0;
+
+uint
+free_amount()
+{
+//  return free_mem;
+  uint count = 0;
+  struct run* now = kmem.freelist;
+  while (now){
+    now = now->next;
+    count++;
+  }
+  return count * PGSIZE;
+}
+// -- my code for lab2 --
+
 void
 kinit()
 {
@@ -55,8 +72,16 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-
+  // 操作需要加锁
   acquire(&kmem.lock);
+  // -- my code for lab2 --
+  // free_mem += PGSIZE; //这样写测试结果会差一个4096,不知道为什么
+  // -- my code for lab2 --
+
+  // -- my comment --
+  // freelist 是一个空闲内存块(一个内存块大小为4k)的链表
+  // 采用头插法将要 free 的内存块加入链表
+  // -- my comment --
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
@@ -69,14 +94,22 @@ void *
 kalloc(void)
 {
   struct run *r;
-
+  // 操作需要加锁
   acquire(&kmem.lock);
   r = kmem.freelist;
+  // -- my comment --
+  // 使用 链表的头
+  // -- my comment --
   if(r)
     kmem.freelist = r->next;
+
+    // -- my code for lab2 --
+    // free_mem -= PGSIZE; //这样写测试结果会差一个4096,不知道为什么
+    // -- my code for lab2 --
+
   release(&kmem.lock);
 
   if(r)
-    memset((char*)r, 5, PGSIZE); // fill with junk
+    memset((char*)r, 5, PGSIZE); // fill with junk:垃圾
   return (void*)r;
 }

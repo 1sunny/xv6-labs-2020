@@ -84,6 +84,22 @@ allocpid() {
 
   return pid;
 }
+// -- my code for lab2 --
+uint
+unused_proc(){
+    uint res = 0;
+    struct proc *p;
+    for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state != UNUSED) {
+            res++;
+        }
+        // 一定要释放锁
+        release(&p->lock);
+    }
+    return res;
+}
+// -- my code for lab2 --
 
 // Look in the process table for an UNUSED proc.
 // If found, initialize state required to run in the kernel,
@@ -295,6 +311,9 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  // -- my code for lab2 --
+  np->trace_flag = p->trace_flag;
+  // -- my code for lab2 --
   release(&np->lock);
 
   return pid;

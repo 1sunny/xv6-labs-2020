@@ -6,6 +6,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "sysinfo.h"
 
 uint64
 sys_exit(void)
@@ -29,6 +30,36 @@ sys_fork(void)
   return fork();
 }
 
+// -- my code for lab2 --
+uint64
+sys_trace(void)
+{
+  uint trace_flag;
+  if(argint(0, (int*)&trace_flag) < 0)
+    return -1;
+  myproc()->trace_flag |= trace_flag;
+  return 0;
+}
+// -- my code for lab2 --
+uint64
+sys_sysinfo(void)
+{
+    uint64 addr; // user pointer to struct sysinfo
+
+    if(argaddr(0, &addr) < 0)
+        return -1;
+
+    struct proc *p = myproc();
+    struct sysinfo info;
+
+    info.freemem = free_amount();
+    info.nproc = unused_proc();
+
+    if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0)
+        return -1;
+    return 0;
+}
+// -- my code for lab2 --
 uint64
 sys_wait(void)
 {
