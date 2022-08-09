@@ -22,7 +22,7 @@ exec(char *path, char **argv)
   struct proc *p = myproc();
 
   begin_op();
-
+  // 根据路径得到 inode
   if((ip = namei(path)) == 0){
     end_op();
     return -1;
@@ -34,7 +34,8 @@ exec(char *path, char **argv)
     goto bad;
   if(elf.magic != ELF_MAGIC)
     goto bad;
-
+  // Create a user page table for a given process,
+  // with no user memory, but with trampoline pages.
   if((pagetable = proc_pagetable(p)) == 0)
     goto bad;
 
@@ -49,6 +50,8 @@ exec(char *path, char **argv)
     if(ph.vaddr + ph.memsz < ph.vaddr)
       goto bad;
     uint64 sz1;
+    // uvmalloc: Allocate PTEs and physical memory to grow process from oldsz to newsz
+    // which need not be page aligned.  Returns new size or 0 on error.
     if((sz1 = uvmalloc(pagetable, sz, ph.vaddr + ph.memsz)) == 0)
       goto bad;
     sz = sz1;
@@ -68,12 +71,20 @@ exec(char *path, char **argv)
   // Use the second as the user stack.
   sz = PGROUNDUP(sz);
   uint64 sz1;
+  // uvmalloc: Allocate PTEs and physical memory to grow process from oldsz to
+  // newsz, which need not be page aligned.  Returns new size or 0 on error.
   if((sz1 = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
   sz = sz1;
+  // uvmclear: mark a PTE invalid for user access.
+  // used by exec for the user stack guard page.
   uvmclear(pagetable, sz-2*PGSIZE);
   sp = sz;
   stackbase = sp - PGSIZE;
+
+  // --- my code for lab3 start ---
+  ukvmcopy(pagetable, p->kpagetable, 0, sz);
+  // --- my code for lab3 end ---
 
   // Push argument strings, prepare rest of stack in ustack.
   for(argc = 0; argv[argc]; argc++) {
@@ -115,6 +126,10 @@ exec(char *path, char **argv)
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
   proc_freepagetable(oldpagetable, oldsz);
+
+  // --- my code for lab3 ---
+  if(p->pid==1) vmprint(p->pagetable, 3, 1);
+  // --- my code for lab3 ---
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
