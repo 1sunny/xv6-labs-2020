@@ -104,6 +104,8 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
+extern uint64 sys_sigalarm(void);
+extern uint64 sys_sigreturn(void);
 
 static uint64 (*syscalls[])(void) = {
 [SYS_fork]    sys_fork,
@@ -127,6 +129,8 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_sigalarm]   sys_sigalarm,
+[SYS_sigreturn]   sys_sigreturn,
 };
 
 void
@@ -134,10 +138,16 @@ syscall(void)
 {
   int num;
   struct proc *p = myproc();
-
+  // 系统调用需要找到它们的参数
+  // 你们还记得write函数的参数吗?分别是文件描述符2,写入数据缓存的指针,写入数据的长度2
+  // syscall函数直接通过trapframe来获取这些参数,就像这里刚刚可以查看trapframe中的a7寄存器一样,
+  // 我们可以查看a0寄存器,这是第一个参数,a1是第二个参数,a2是第三个参数
   num = p->trapframe->a7;
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
+    // 所有的系统调用都有一个返回值
+    // 而RISC-V上的C代码的习惯是函数的返回值存储于寄存器a0
     p->trapframe->a0 = syscalls[num]();
+    // 执行后回到 usertrap 函数 (trap.c)
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

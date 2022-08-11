@@ -80,6 +80,9 @@ int             pipewrite(struct pipe*, uint64, int);
 void            printf(char*, ...);
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
+// --- my code for lab4 start ---
+void            backtrace(void);
+// --- my code for lab4 end ---
 
 // proc.c
 int             cpuid(void);

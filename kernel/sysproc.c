@@ -7,6 +7,28 @@
 #include "spinlock.h"
 #include "proc.h"
 
+// --- my code for lab4 start ---
+uint64 sys_sigreturn(void){
+  struct proc *p = myproc();
+  if (p->alarm_trapframe){
+    memmove(p->trapframe, p->alarm_trapframe, 512);
+  }
+  p->in_handler = 0;
+  return 0;
+}
+
+uint64 sys_sigalarm(void){
+  int ticks;
+  uint64 handler;
+  if(argint(0, &ticks) < 0 || argaddr(1, &handler) < 0)
+    return -1;
+  struct proc *p = myproc();
+  p->alarm_period = ticks;
+  p->handler = handler;
+  p->ticks_past = 0;
+  return 0;
+}
+// --- my code for lab4 end ---
 uint64
 sys_exit(void)
 {
@@ -60,6 +82,9 @@ sys_sleep(void)
 
   if(argint(0, &n) < 0)
     return -1;
+  // --- my code for lab4 start ---
+  backtrace();
+  // --- my code for lab4 end ---
   acquire(&tickslock);
   ticks0 = ticks;
   while(ticks - ticks0 < n){

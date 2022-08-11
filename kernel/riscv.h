@@ -278,7 +278,15 @@ intr_get()
   uint64 x = r_sstatus();
   return (x & SSTATUS_SIE) != 0;
 }
-
+// --- my code for lab4 start ---
+static inline uint64
+r_fp()
+{
+  uint64 x;
+  asm volatile("mv %0, s0" : "=r" (x) );
+  return x;
+}
+// --- my code for lab4 end ---
 static inline uint64
 r_sp()
 {
