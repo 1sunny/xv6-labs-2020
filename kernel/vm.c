@@ -91,6 +91,8 @@ walk(pagetable_t pagetable, uint64 va, int alloc)
 // Look up a virtual address, return the physical address,
 // or 0 if not mapped.
 // Can only be used to look up user pages.
+// 当进程通过read或write等系统调用访问未分配页面的地址时,并不会通过页表硬件来访问,也就是说不会发生缺页异常
+// 在内核态时是通过walkaddr来访问用户页表的，因此在这里也要对缺页的情况进行处理。
 uint64
 walkaddr(pagetable_t pagetable, uint64 va)
 {
@@ -101,10 +103,19 @@ walkaddr(pagetable_t pagetable, uint64 va)
     return 0;
 
   pte = walk(pagetable, va, 0);
-  if(pte == 0)
-    return 0;
-  if((*pte & PTE_V) == 0)
-    return 0;
+  // --- my code for lab5 start ---
+//  if(pte == 0)
+//    return 0;
+//  if((*pte & PTE_V) == 0)
+//    return 0;
+  if (pte == 0 || (*pte & PTE_V) == 0){
+    if (lazy_alloc(va) == 0){
+      pte = walk(pagetable, va, 0);
+    }else{
+      return 0;
+    }
+  }
+  // --- my code for lab5 end ---
   if((*pte & PTE_U) == 0)
     return 0;
   pa = PTE2PA(*pte);
@@ -181,9 +192,13 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+      // --- my code for lab5 start ---
+      continue; // 如果一个页不存在，则认为是懒加载的页，忽略即可
+//      panic("uvmunmap: walk");
     if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+      continue;
+//      panic("uvmunmap: not mapped");
+      // --- my code for lab5 end ---
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -315,9 +330,13 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+    // --- my code for lab5 start ---
+      continue; // 如果一个页不存在，则认为是懒加载的页，忽略即可
+//      panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue;
+    // --- my code for lab5 start ---
+//      panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
