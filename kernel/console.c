@@ -55,6 +55,7 @@ struct {
 //
 // user write()s to the console go here.
 //
+// 可以认为consolewrite是一个UART驱动的top部分
 int
 consolewrite(int user_src, uint64 src, int n)
 {
@@ -63,6 +64,7 @@ consolewrite(int user_src, uint64 src, int n)
   acquire(&cons.lock);
   for(i = 0; i < n; i++){
     char c;
+    // 通过either_copyin将shell要发送的数据(字符串)拷入
     if(either_copyin(&c, user_src, src+i, 1) == -1)
       break;
     uartputc(c);

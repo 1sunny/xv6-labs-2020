@@ -84,6 +84,7 @@ enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
+  // 保护了对于state字段的更新,两个CPU的调度器线程不会同时拉取同一个RUNABLE进程并运行它
   struct spinlock lock;
 
   // p->lock must be held when using these:
@@ -95,10 +96,13 @@ struct proc {
   int pid;                     // Process ID
 
   // these are private to the process, so p->lock need not be held.
+  // 当前进程的内核栈,这是进程在内核中执行时保存函数调用的位置
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
+  // 保存了用户空间线程寄存器的trapframe字段
   struct trapframe *trapframe; // data page for trampoline.S
+  // 保存了内核线程寄存器的context字段
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory

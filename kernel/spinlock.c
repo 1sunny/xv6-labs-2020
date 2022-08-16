@@ -29,6 +29,13 @@ acquire(struct spinlock *lk)
   //   a5 = 1
   //   s1 = &lk->locked
   //   amoswap.w.aq a5, a5, (s1)
+  // 总的来说,一种情况下我们跳出循环,另一种情况我们继续执行循环
+  // C代码就要简单的多.如果锁没有被持有,那么锁对象的locked字段会是0,
+  // 如果locked字段等于0,我们调用test-and-set将1写入locked字段,
+  // 并且返回locked字段之前的数值0.如果返回0,那么意味着没有人持有锁,循环结束
+  // 如果locked字段之前是1,那么这里的流程是,先将之前的1读出,然后写入一个新的1
+  // 但是这不会改变任何数据,因为locked之前已经是1了
+  // 之后__sync_lock_test_and_set会返回1表明锁之前已经被人持有了
   while(__sync_lock_test_and_set(&lk->locked, 1) != 0)
     ;
 
@@ -57,6 +64,7 @@ release(struct spinlock *lk)
   // and that loads in the critical section occur strictly before
   // the lock is released.
   // On RISC-V, this emits a fence instruction.
+  // 任何在它之前的load/store指令,都不能移动到它之后
   __sync_synchronize();
 
   // Release the lock, equivalent to lk->locked = 0.

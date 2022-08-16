@@ -108,6 +108,12 @@ piperead(struct pipe *pi, uint64 addr, int n)
 
   acquire(&pi->lock);
   while(pi->nread == pi->nwrite && pi->writeopen){  //DOC: pipe-empty
+    // 如果一个进程正在sleep状态等待从pipe中读取数据,
+    // 然后它被kill了.kill函数会将其设置为RUNNABLE,之后进程会从sleep中返回,
+    // 返回到循环的最开始.pipe中大概率还是没有数据,之后在piperead中,
+    // 会判断进程是否被kill了(注,if(pr->killed)).如果进程被kill了,
+    // 那么接下来piperead会返回-1,并且返回到usertrap函数的syscall位置,
+    // 因为piperead就是一种系统调用的实现
     if(pr->killed){
       release(&pi->lock);
       return -1;

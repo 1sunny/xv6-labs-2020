@@ -22,7 +22,7 @@ start()
 {
   // set M Previous Privilege mode to Supervisor, for mret.
   unsigned long x = r_mstatus();
-  x &= ~MSTATUS_MPP_MASK;
+  x &= ~MSTATUS_MPP_MASK; // 清空要操作的那两位
   x |= MSTATUS_MPP_S;
   w_mstatus(x);
 
@@ -34,8 +34,12 @@ start()
   w_satp(0);
 
   // delegate all interrupts and exceptions to supervisor mode.
+  // 将所有中断和异常委托给supervisor模式
+  // 这里将所有的中断都设置在Supervisor mode,然后设置SIE寄存器来接收External
+  // ,软件和定时器中断,之后初始化定时器
   w_medeleg(0xffff);
   w_mideleg(0xffff);
+  //                external   timer      software
   w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 
   // ask for clock interrupts.

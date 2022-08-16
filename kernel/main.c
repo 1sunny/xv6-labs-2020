@@ -23,6 +23,8 @@ main()
     trapinit();      // trap vectors
     trapinithart();  // install kernel trap vector
     plicinit();      // set up interrupt controller
+    // main函数中,plicinit之后就是plicinithart函数
+    // plicinit是由0号CPU运行,之后,每个CPU的核都需要调用plicinithart函数表明对于哪些外设中断感兴趣
     plicinithart();  // ask PLIC for device interrupts
     binit();         // buffer cache
     iinit();         // inode cache
@@ -40,6 +42,9 @@ main()
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
   }
-
+  // 到目前为止,我们有了生成中断的外部设备,
+  // 我们有了PLIC可以传递中断到单个的CPU
+  // 但是CPU自己还没有设置好接收中断,因为我们还没有设置好SSTATUS寄存器
+  // 在main函数的最后,程序调用了scheduler函数
   scheduler();        
 }

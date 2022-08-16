@@ -10,13 +10,14 @@
 #include "kernel/fcntl.h"
 
 char *argv[] = { "sh", 0 };
-
+// 系统启动后运行的第一个进程
 int
 main(void)
 {
   int pid, wpid;
 
   if(open("console", O_RDWR) < 0){
+    // mknod操作创建了console设备
     mknod("console", CONSOLE, 0);
     open("console", O_RDWR);
   }
