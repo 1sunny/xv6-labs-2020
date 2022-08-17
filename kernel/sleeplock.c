@@ -18,6 +18,15 @@ initsleeplock(struct sleeplock *lk, char *name)
   lk->pid = 0;
 }
 
+// 对于spinlock有很多限制,其中之一是加锁时中断必须要关闭
+// 所以如果使用spinlock的话,当我们对block cache做操作的时候需要持有锁,
+// 那么我们就永远也不能从磁盘收到数据,或许另一个CPU核可以收到中断并读到磁盘数据
+// 但是如果我们只有一个CPU核的话,我们就永远也读不到数据了
+// 出于同样的原因,也不能在持有spinlock的时候进入sleep状态(详见13.1).
+// 所以这里我们使用sleep lock.
+// sleep lock的优势就是,我们可以在持有锁的时候不关闭中断
+// 我们可以在磁盘操作的过程中持有锁,我们也可以长时间持有锁
+// 当我们在等待sleep lock的时候,我们并没有让CPU一直空转,我们通过sleep将CPU出让出去了
 void
 acquiresleep(struct sleeplock *lk)
 {
