@@ -147,11 +147,14 @@ begin_op(void)
     if(log.committing){
       sleep(&log, &log.lock);
       // log.outstanding 预定了日志空间的系统调用数
-      // log.lh.n ?
+      // log.lh.n -> log中被修改的块的数量
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
       // this op might exhaust log space; wait for commit.
       sleep(&log, &log.lock);
     } else {
+      // 为了允许不同进程并发执行文件系统操作,日志系统可以将多个 **系统调用(不是create,writei)** 的写
+      // 入累积到一个事务中.因此,单个提交可能涉及多个完整系统调用的写入.为了避
+      // 免在事务之间拆分系统调用,日志系统仅在没有文件系统调用进行时提交
       log.outstanding += 1;
       release(&log.lock);
       break;

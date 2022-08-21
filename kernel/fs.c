@@ -390,10 +390,14 @@ iunlock(struct inode *ip) {
 // case it has to free the inode.
 //
 // 通过减少引用计数释放指向inode的C指针
+// 如果这是最后一次引用,那么 inode cache 会被回收
+// 如果是最后一次引用且 links 也等于0, 那么磁盘上的inode也会被free
+// 必须在transaction中调用 iput()(因为要释放inode)
 void
 iput(struct inode *ip) {
   acquire(&icache.lock);
   // 没有指向inode的C指针引用,并且inode没有指向它的链接(发生于无目录)
+  // 如果是最后一次引用且 links 也等于0, 那么磁盘上的inode也会被free
   if (ip->ref == 1 && ip->valid && ip->nlink == 0) {
     // inode has no links and no other references: truncate and free.
 
@@ -500,7 +504,7 @@ void
 itrunc(struct inode *ip) {
   int i, j;
   struct buf *bp;
-  uint *a;
+  uint *a, *b;
 
   for (i = 0; i < NDIRECT; i++) {
     if (ip->addrs[i]) {
@@ -523,17 +527,19 @@ itrunc(struct inode *ip) {
   // --- my code for lab9 start ---
   if (ip->addrs[NDIRECT + 1]) {
     bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
+    a = (uint *) bp->data;
     struct buf *bp2;
     for (j = 0; j < NINDIRECT; j++) {
-      if (bp->data[j]) {
-        bp2 = bread(ip->dev, bp->data[j]);
+      if (a[j]) {
+        bp2 = bread(ip->dev, a[j]);
+        b = (uint *) bp2->data;
         for (int k = 0; k < NINDIRECT; k++) {
-          if (bp2->data[k]) {
-            bfree(ip->dev, bp2->data[k]);
+          if (b[k]) {
+            bfree(ip->dev, b[k]);
           }
         }
         brelse(bp2);
-        bfree(ip->dev, bp->data[j]);
+        bfree(ip->dev, a[j]);
       }
     }
     bfree(ip->dev, ip->addrs[NDIRECT + 1]);
@@ -594,6 +600,10 @@ readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n) {
 // Returns the number of bytes successfully written.
 // If the return value is less than the requested n,
 // there was an error of some kind.
+//
+// 向 inode 中写入数据
+// 调用者需要持有 ip->lock
+// 返回写入成功的字节数
 int
 writei(struct inode *ip, int user_src, uint64 src, uint off, uint n) {
   uint tot, m;

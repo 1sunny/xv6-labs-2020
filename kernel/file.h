@@ -2,8 +2,8 @@
 // 如果多个进程独立地打开同一个文件,那么不同的实例将具有不同的I/O偏移量
 struct file {
   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
-  // 单个打开的文件（同一个 struct file ）可以多次出现在一个进程的文件表中,
-  // 也可以出现在多个进程的文件表中。如果一个进程使用 open 打开文件,
+  // 单个打开的文件(同一个 struct file)可以多次出现在一个进程的文件表中,
+  // 也可以出现在多个进程的文件表中.如果一个进程使用 open 打开文件,
   // 然后使用 dup 创建别名,或使用 fork 与子进程共享,就会发生这种情况
   // 引用计数跟踪对特定打开文件的引用数
   int ref; // reference count
@@ -20,17 +20,23 @@ struct file {
 #define	mkdev(m,n)  ((uint)((m)<<16| (n)))
 
 // in-memory copy of an inode
+// 为什么要封装dinode为inode?
+// 1. 区分设备号
+// 2. 同步多个进程的访问
 struct inode {
   uint dev;           // Device number
   uint inum;          // Inode number
+  // 决定 icache 是否缓存这个inode
   int ref;            // Reference count
   struct sleeplock lock; // protects everything below here
+  // 是否从磁盘中读取了dinode
   int valid;          // inode has been read from disk?
 
   // copy of disk inode
   short type;
   short major;
   short minor;
+  // 决定磁盘中是否有这个 dinode
   short nlink;
   uint size;
   // --- my code for lab9 start ---
