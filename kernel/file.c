@@ -14,6 +14,7 @@
 #include "proc.h"
 
 struct devsw devsw[NDEV];
+// 文件描述符层: 系统中所有打开的文件都保存在全局文件表 ftable 中
 struct {
   struct spinlock lock;
   struct file file[NFILE];
@@ -68,6 +69,7 @@ fileclose(struct file *f)
     release(&ftable.lock);
     return;
   }
+  // 当文件的引用计数达到零时,fileclose 会根据 type 释放底层管道或inode
   ff = *f;
   f->ref = 0;
   f->type = FD_NONE;
@@ -89,7 +91,7 @@ filestat(struct file *f, uint64 addr)
 {
   struct proc *p = myproc();
   struct stat st;
-  
+  // 只允许在inode上操作
   if(f->type == FD_INODE || f->type == FD_DEVICE){
     ilock(f->ip);
     stati(f->ip, &st);
@@ -118,9 +120,15 @@ fileread(struct file *f, uint64 addr, int n)
       return -1;
     r = devsw[f->major].read(1, addr, n);
   } else if(f->type == FD_INODE){
+    /*
+     1. inode的函数要求调用方处理锁
+     2. inode锁定有一个方便的副作用,即读取和写入偏移量以原子方式更新,
+     因此,对同一文件的同时多次[写入]不覆盖彼此的数据,尽管他们的写入最终可能交错
+     */
     ilock(f->ip);
+    // readi(struct inode *ip, int user_dst, uint64 dst, uint off, uint n)
     if((r = readi(f->ip, 1, addr, f->off, n)) > 0)
-      f->off += r;
+      f->off += r; // 文件指针前进该偏移量
     iunlock(f->ip);
   } else {
     panic("fileread");
@@ -131,6 +139,7 @@ fileread(struct file *f, uint64 addr, int n)
 
 // Write to file f.
 // addr is a user virtual address.
+// addr 是用户空间虚拟地址
 int
 filewrite(struct file *f, uint64 addr, int n)
 {
@@ -161,6 +170,7 @@ filewrite(struct file *f, uint64 addr, int n)
 
       begin_op();
       ilock(f->ip);
+      // writei 的调用写入许多块:文件的inode,一个或多个位图块以及一些数据块
       if ((r = writei(f->ip, 1, addr + i, f->off, n1)) > 0)
         f->off += r;
       iunlock(f->ip);

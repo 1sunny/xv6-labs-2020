@@ -22,7 +22,8 @@ initsleeplock(struct sleeplock *lk, char *name)
 // 所以如果使用spinlock的话,当我们对block cache做操作的时候需要持有锁,
 // 那么我们就永远也不能从磁盘收到数据,或许另一个CPU核可以收到中断并读到磁盘数据
 // 但是如果我们只有一个CPU核的话,我们就永远也读不到数据了
-// 出于同样的原因,也不能在持有spinlock的时候进入sleep状态(详见13.1).
+// 出于同样的原因,也不能在持有spinlock的时候进入sleep状态
+// (见13.1: sleep会使得线程切换,而在xv6线程切换过程中,只能持有proc->lock).
 // 所以这里我们使用sleep lock.
 // sleep lock的优势就是,我们可以在持有锁的时候不关闭中断
 // 我们可以在磁盘操作的过程中持有锁,我们也可以长时间持有锁

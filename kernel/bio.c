@@ -19,6 +19,20 @@
 //     so do not keep them longer than necessary.
 //   同一时间,只有一个进程可以使用buffer
 
+// 如果buffer cache中有两份block 33的cache将会出现问题
+// 假设一个进程要更新inode19,另一个进程要更新inode20
+// 如果它们都在处理block 33的cache,并且cache有两份,
+// 那么第一个进程可能持有一份cache并先将inode19写回到磁盘中,
+// 而另一个进程持有另一份cache会将inode20写回到磁盘中,
+// 并将inode19的更新覆盖掉,所以一个block只能在buffer cache中出现一次
+// 你们在完成File system lab时,必须要维持buffer cache的这个属性
+
+// 1. 在内存中,对于一个block只能有一份缓存,这是block cache必须维护的特性
+// 2. 这里使用了与之前的spinlock略微不同的sleep lock,
+//    与spinlock不同的是,可以在I/O操作的过程中持有sleep lock
+// 3. 采用了LRU作为cache替换策略
+// 4. 它有两层锁,第一层锁用来保护buffer cache的内部数据;
+//    第二层锁也就是sleep lock用来保护单个block的cache
 
 #include "types.h"
 #include "param.h"
@@ -114,6 +128,7 @@ bread(uint dev, uint blockno)
 }
 
 // Write b's contents to disk.  Must be locked.
+// 文件系统中的所有bwrite都需要被log_write替换
 void
 bwrite(struct buf *b)
 {

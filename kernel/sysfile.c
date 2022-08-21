@@ -37,6 +37,7 @@ argfd(int n, int *pfd, struct file **pf)
 
 // Allocate a file descriptor for the given file.
 // Takes over file reference from caller on success.
+// 最小未使用的
 static int
 fdalloc(struct file *f)
 {
@@ -141,7 +142,7 @@ sys_link(void)
   ip->nlink++;
   iupdate(ip);
   iunlock(ip);
-
+  // new的父目录须存在且与现有inode位于同一设备:inode号在一个磁盘上有唯一的含义
   if((dp = nameiparent(new, name)) == 0)
     goto bad;
   ilock(dp);
@@ -243,21 +244,24 @@ create(char *path, short type, short major, short minor)
 {
   struct inode *ip, *dp;
   char name[DIRSIZ];
-
+  // 解析路径名并找到最后一个目录,之后会查看文件是否存在,如果存在的话会返回错误
+  // 获取父目录的inode
   if((dp = nameiparent(path, name)) == 0)
     return 0;
 
   ilock(dp);
-
+  // 检查名称是否已经存在
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
+    // 代表 open(type == T_FILE)使用的 ??
+    // 并且存在的名称本身是一个常规文件那么 open 会将其视为成功
     if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
       return ip;
     iunlockput(ip);
     return 0;
   }
-
+  // 如果名称不存在,分配inode
   if((ip = ialloc(dp->dev, type)) == 0)
     panic("create: ialloc");
 
@@ -267,6 +271,7 @@ create(char *path, short type, short major, short minor)
   ip->nlink = 1;
   iupdate(ip);
 
+  // 如果新inode是目录, create 将使用 . 和 .. 条目对它进行初始化
   if(type == T_DIR){  // Create . and .. entries.
     dp->nlink++;  // for ".."
     iupdate(dp);
@@ -274,12 +279,12 @@ create(char *path, short type, short major, short minor)
     if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
       panic("create dots");
   }
-
+  // 数据已正确初始化,create 可以将其链接到父目录
   if(dirlink(dp, name, ip->inum) < 0)
     panic("create: dirlink");
 
   iunlockput(dp);
-
+  // Create返回一个锁定的inode,但namei不锁定,因此sys_open必须锁定inode本身
   return ip;
 }
 
@@ -294,12 +299,16 @@ sys_open(void)
 
   if((n = argstr(0, path, MAXPATH)) < 0 || argint(1, &omode) < 0)
     return -1;
-
+  // 开始一个事务,这些写block操作要么全写入,要么全不写入
   begin_op();
 
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
+      // 在begin_op和end_op之间,磁盘上或者内存中的数据结构会更新
+      // 但是在end_op之前,并不会有实际的改变(也就是不会写入到实际的block中).
+      // 在end_op时,我们将数据写入到log中,再写入commit record或者log header
+      // end_op中会实现commit操作
       end_op();
       return -1;
     }
@@ -309,6 +318,7 @@ sys_open(void)
       return -1;
     }
     ilock(ip);
+    // 打开目录只能以读方式
     if(ip->type == T_DIR && omode != O_RDONLY){
       iunlockput(ip);
       end_op();
