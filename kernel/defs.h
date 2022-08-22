@@ -63,6 +63,9 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+// --- my code for lab10 start ---
+uint64          mmap_alloc(uint64);
+// --- my code for lab10 end ---
 
 // log.c
 void            initlog(int, struct superblock*);

@@ -49,8 +49,14 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
-  if(r_scause() == 8){
+  // --- my code for lab10 start ---
+  uint64 scause = r_scause();
+  // 13表示是因为load引起的page fault
+  // 15表示是因为store引起的page fault
+  // 12表示是因为指令执行引起的page fault
+  if(scause == 8){
+  // --- my code for lab10 end ---
+
     // system call
 
     if(p->killed)
@@ -67,12 +73,22 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  }
+  // --- my code for lab10 start ---
+  else if(scause == 15 || scause == 13){
+    // mmap_alloc -> check mmap, readi, mappage, prot
+    if (mmap_alloc(r_stval()) != 0){
+      p->killed = 1;
+    }
+    // 在这里不需要进行p->trapframe->epc += 4操作，因为我们要返回发生异常的那条指令并重新执行
+    // --- my code for lab5 end ---
+  }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
   }
-
+  // --- my code for lab10 end ---
   if(p->killed)
     exit(-1);
 

@@ -128,6 +128,10 @@ found:
     return 0;
   }
 
+  // --- my code for lab10 start ---
+  memset(p->vma, 0, sizeof (p->vma));
+  // --- my code for lab10 end ---
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -143,6 +147,10 @@ found:
 static void
 freeproc(struct proc *p)
 {
+  // --- my code for lab10 start ---
+  memset(p->vma, 0, sizeof (p->vma));
+  // --- my code for lab10 end ---
+
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
@@ -280,6 +288,14 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+  // --- my code for lab10 start ---
+  for (int j = 0; j < NVMA; ++j) {
+    if (p->vma[j].len){
+      filedup(p->vma[j].file); // !
+      np->vma[j] = p->vma[j];
+    }
+  }
+  // --- my code for lab10 end ---
   np->sz = p->sz;
 
   np->parent = p;
@@ -343,6 +359,21 @@ exit(int status)
 
   if(p == initproc)
     panic("init exiting");
+
+  // --- my code for lab10 start ---
+  for (int i = 0; i < NVMA; ++i) {
+    struct vma* v = &p->vma[i];
+    if (v->len){
+      if (v->shared) {
+        filewrite(v->file, v->start, v->end - v->start);
+      }
+      int pages = (PGROUNDUP(v->end) - PGROUNDDOWN(v->start)) / PGSIZE;
+      uvmunmap(p->pagetable, PGROUNDDOWN(v->start), pages, 1);
+      fileclose(v->file);
+      memset(v, 0, sizeof(*v));
+    }
+  }
+  // --- my code for lab10 end ---
 
   // Close all open files.
   for(int fd = 0; fd < NOFILE; fd++){

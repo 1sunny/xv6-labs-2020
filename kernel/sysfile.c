@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -484,3 +485,110 @@ sys_pipe(void)
   }
   return 0;
 }
+
+// --- my code for lab10 start ---
+uint64
+sys_mmap(void){
+  // void* mmap(void*, int, int, int, int, int);
+  uint64 addr; // in this lab, it is 0
+  int len;
+  int prot; // PROT_READ, PROT_WRITE, or both
+  int flags; // MAP_SHARED, MAP_PRIVATE
+  int fd;
+  int off; // in this lab, it is 0
+  struct file* file = 0;
+  if (argaddr(0, &addr) < 0 || argint(1, &len) < 0 || argint(2, &prot) < 0
+      || argint(3, &flags) < 0 || argfd(4, &fd, &file) < 0 || argint(5, &off) < 0
+          ){
+    return -1;
+  }
+  if (len <= 0 || file == 0){
+    return -1;
+  }
+  if (!((prot & PROT_READ) || (prot & PROT_WRITE))){
+    panic("no prot");
+  }
+  if ((flags & MAP_SHARED) && (prot & PROT_WRITE) && !file->writable){
+    return -1;
+  }
+
+  struct proc* p = myproc();
+  struct vma* v = 0;
+  uint64 vma_end = VMAEND;
+  for (int i = 0; i < NVMA; ++i) {
+    if (v == 0 && p->vma[i].len == 0){
+      v = &p->vma[i];
+    }
+    if (p->vma[i].len && p->vma[i].start < vma_end){
+      vma_end = p->vma[i].start;
+    }
+  }
+  if (v == 0){
+    return -1;
+  }
+  v->start = vma_end - PGROUNDUP(len);
+  v->end = v->start + len;
+  v->len = len;
+  v->prot = prot;
+  v->fd = fd;
+  v->off = off;
+  v->shared = (flags == MAP_SHARED);
+  v->readable = prot & PROT_READ;
+  v->writable = prot & PROT_WRITE;
+  v->pages = (PGROUNDUP(v->end) - v->start) / PGSIZE;
+  v->file = file;
+  // struct file* filedup(struct file *f)
+  filedup(file);
+  return v->start;
+}
+
+uint64
+sys_munmap(void) {
+  uint64 start;
+  int len;
+  if (argaddr(0, &start) < 0 || argint(1, &len) < 0 || len <= 0) {
+    return -1;
+  }
+  uint64 end = start + len;
+  struct proc *p = myproc();
+  // va must be page-aligned
+  // void uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
+  for (int i = 0; i < NVMA; ++i) {
+    struct vma *v = &p->vma[i];
+    // 没处理len不合法的情况...
+    if (v->len && v->start <= start && end <= v->end) {
+      if (v->shared) {
+        // int filewrite(struct file *f, uint64 addr, int n)
+        // addr is a user virtual address
+        // -1 on error, wrote number on success
+        filewrite(v->file, start, len);
+      }
+      // 测试太松了,567-578注释掉也能过
+      if (start == v->start){
+        v->start = end;
+        v->off += end - start; // !
+        start = PGROUNDDOWN(start);
+      }else{
+        start = PGROUNDUP(start);
+      }
+      if (end != v->end){
+        end = PGROUNDDOWN(end);
+      }else{
+        end = PGROUNDUP(end);
+      }
+      int pages = (end - start) / PGSIZE;
+      if (pages < 0){
+        panic("pages < 0");
+      }
+      uvmunmap(p->pagetable, start, pages, 1);
+      v->pages -= pages;
+      if (v->pages == 0){
+        fileclose(v->file);
+        memset(v, 0, sizeof(*v));
+      }
+      return 0;
+    }
+  }
+  return -1;
+}
+// --- my code for lab10 end ---

@@ -23,6 +23,10 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+// --- my code for lab10 start ---
+void* mmap(void*, int, int, int, int, int);
+int munmap(void*, int);
+// --- my code for lab10 end ---
 
 // ulib.c
 int stat(const char*, struct stat*);

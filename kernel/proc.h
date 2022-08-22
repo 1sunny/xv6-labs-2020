@@ -81,7 +81,22 @@ struct trapframe {
 };
 
 enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
-
+// --- my code for lab10 start ---
+struct vma {
+  uint64 start, end;
+  int len;
+  int prot; // permission
+  int fd;
+  int off; // in this lab, always 0
+  int shared; // whether MAP_SHARED
+  int readable;
+  int writable;
+  int pages;
+  struct file* file;
+  // i don't think the spinlock is necessary
+  // cause it is private to process
+};
+// --- my code for lab10 end ---
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -103,4 +118,18 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  // --- my code for lab10 start ---
+  struct vma vma[NVMA];
+  // --- 个人理解记录 ---
+  // 为什么vma需要映射到进程的映射区域表中?
+  // 可以类比trampoline和 p->trapframe为什么要映射:
+  // trampoline是从用户空间通过系统调用进入内核前的代码(保护寄存器等工作)
+  // 不映射的话用户空间无法找到这里
+  // 为了保护用户进程的状态(寄存器,pc等),所以需要将进入内核前的状态
+  // 保存到 p->trapframe,不映射的话怎么保存
+  // 为什么像 ofile, context 这些不用?
+  // 因为只有在内核中才会用这些变量
+  // --- 个人理解记录 ---
+  // --- my code for lab10 end ---
 };
