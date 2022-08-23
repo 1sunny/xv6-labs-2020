@@ -91,7 +91,7 @@ e1000_init(uint32 *xregs)
   regs[E1000_RADV] = 0; // interrupt after every packet (no timer)
   regs[E1000_IMS] = (1 << 7); // RXDW -- Receiver Descriptor Write Back
 }
-
+// 参考自: https://blog.miigon.net/posts/s081-lab11-network/
 int
 e1000_transmit(struct mbuf *m)
 {
@@ -102,7 +102,27 @@ e1000_transmit(struct mbuf *m)
   // the TX descriptor ring so that the e1000 sends it. Stash
   // a pointer so that it can be freed after sending.
   //
-  
+
+  acquire(&e1000_lock);
+  uint32 p = regs[E1000_TDT];
+  if ((tx_ring[p].status & E1000_TXD_STAT_DD) == 0){
+    release(&e1000_lock);
+    return -1;
+  }
+  // 释放从该描述符传输的最后一个 mbuf
+  if (tx_mbufs[p]){
+    mbuffree(tx_mbufs[p]);
+    tx_mbufs[p] = 0;
+  }
+  tx_ring[p].addr = (uint64)m->head;
+  tx_ring[p].length = m->len;
+  // 设置参数，EOP 表示该 buffer 含有一个完整的 packet
+  // *** RS 告诉网卡在发送完成后,设置 status 中的 E1000_TXD_STAT_DD 位,表示发送完成 ***
+  tx_ring[p].cmd = E1000_TXD_CMD_EOP | E1000_TXD_CMD_RS;
+  // 保存指针,下一次到这个位置时释放物理内存
+  tx_mbufs[p] = m;
+  regs[E1000_TDT] = (p + 1) % RX_RING_SIZE;
+  release(&e1000_lock);
   return 0;
 }
 
@@ -115,6 +135,30 @@ e1000_recv(void)
   // Check for packets that have arrived from the e1000
   // Create and deliver an mbuf for each packet (using net_rx()).
   //
+  // recv()是在bottom half的interrupt handler中,只有一个进程在跑这个handler,因此不存在共享的数据结构
+  // from https://fanxiao.tech/posts/MIT-6S081-notes/
+  while (1){
+    // 首先通过提取 E1000_RDT 控制寄存器并加一对 RX_RING_SIZE 取模,
+    // 向E1000询问下一个等待接收数据包(如果有)所在的环索引
+    uint32 p = (regs[E1000_RDT] + 1) % RX_RING_SIZE;
+    // 检查描述符 status 部分中的 E1000_RXD_STAT_DD 位来检查新数据包是否可用
+    if(!(rx_ring[p].status & E1000_RXD_STAT_DD)){
+      return;
+    }
+    // 将 mbuf 的 m->len 更新为描述符中报告的长度
+    rx_mbufs[p]->len = rx_ring[p].length;
+    // 将 mbuf 传送到网络栈
+    net_rx(rx_mbufs[p]);
+    // 替换刚刚给 net_rx() 的 mbuf
+    struct mbuf* b = mbufalloc(0);
+    // 数据指针(m->head)编程到描述符
+    rx_ring[p].addr = (uint64)b->head;
+    // 描述符的状态位清除为零
+    rx_ring[p].status = 0;
+    rx_mbufs[p] = b;
+    // 将 E1000_RDT 寄存器更新为最后处理的环描述符的索引
+    regs[E1000_RDT] = p;
+  }
 }
 
 void

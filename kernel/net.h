@@ -87,6 +87,9 @@ struct eth {
 #define ETHTYPE_ARP 0x0806 // Address resolution protocol
 
 // an IP packet header (comes after an Ethernet header).
+// 以太网类型(eth.type)为 0x0800
+// IP header中的protocol字段告诉了目的主机的网络协议栈,
+// 这个packet应该被UDP软件处理
 struct ip {
   uint8  ip_vhl; // version << 4 | header length >> 2
   uint8  ip_tos; // type of service
@@ -108,6 +111,7 @@ struct ip {
    ((uint32)c << 8) | (uint32)d)
 
 // a UDP packet header (comes after an IP header).
+// ip.protocol = 0x11(17)
 struct udp {
   uint16 sport; // source port
   uint16 dport; // destination port
@@ -116,6 +120,7 @@ struct udp {
 };
 
 // an ARP packet (comes after an Ethernet header).
+// 以太网类型(eth.type)为 0x0806
 struct arp {
   uint16 hrd; // format of hardware address
   uint16 pro; // format of protocol address
